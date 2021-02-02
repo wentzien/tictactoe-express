@@ -83,12 +83,16 @@ io.on("connection", (socket) => {
                 gameData[item] = game[item];
         }
 
-        // gameData.board = game.board;
+        const aWon = hasWon(gameData.board, "a");
+        const bWon = hasWon(gameData.board, "b");
+        const draw = checkDraw(gameData.board);
 
-        if(gameData.gameStatus === "bTurn") {
-            gameData.gameStatus = "aTurn";
-        } else {
-            gameData.gameStatus = "bTurn";
+        if(aWon) gameData.gameStatus = "aWon"
+        else if (bWon) gameData.gameStatus = "bWon"
+        else if (draw) gameData.gameStatus = "draw"
+        else {
+            if(gameData.gameStatus === "bTurn") gameData.gameStatus = "aTurn"
+            else gameData.gameStatus = "bTurn"
         }
 
         const result = await db.updateGame(gameData);
@@ -109,3 +113,33 @@ io.on("connection", (socket) => {
 // Port
 const port = process.env.PORT || 5000;
 server.listen(port, () => console.log(`App listening on port ${port}...)`));
+
+
+//helper functions
+function hasWon(board, player) {
+    for (let i = 0; i <= 2; i++) {
+        // Horizontal
+        if (board[i][0] === player && board[i][1] === player && board[i][2] === player)
+            return true;
+        // Vertical
+        if (board[0][i] === player && board[1][i] === player && board[2][i] === player)
+            return true;
+    }
+    // Diagonal
+    if (board[0][0] === player && board[1][1] === player && board[2][2] === player)
+        return true;
+    // Counter Diagonal
+    if (board[2][0] === player && board[1][1] === player && board[0][2] === player)
+        return true;
+    return false;
+}
+function checkDraw(board) {
+    for (let i = 0; i <= 2; i++) {
+        for (let j = 0; j <= 2; j++) {
+            if (board[i][j] === 0) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
