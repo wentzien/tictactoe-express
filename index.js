@@ -13,34 +13,32 @@ const io = socketio(server, {
     }
 });
 
+const gamesRouter = require("./routes/games");
 const db = require("./db/mysql");
 
-// const questionRouter = require("./routes/questions");
-// const eventRouter = require("./routes/events");
-
 app.use(cors());
-
 app.use(express.json());
+
+app.use("/games", gamesRouter);
 
 io.on("connection", (socket) => {
     console.log("new connection");
 
     socket.on("join", async (game, answer) => {
-        // gameId, aPlayerId, bPlayerId
-
+        let player;
         let gameData = await db.getGame(game.gameId);
 
-        if (!(gameData = gameData[0])) {
+        if (gameData === null) {
             // new game
             console.log("new game, player a joining");
             gameData = {
                 gameId: game.gameId,
                 aPlayerId: game.playerId,
-                board: JSON.stringify([
+                board: [
                     [0, 0, 0],
                     [0, 0, 0],
                     [0, 0, 0]
-                ]),
+                ],
                 aScore: 0,
                 bScore: 0,
                 gameStatus: "pending",
@@ -52,27 +50,25 @@ io.on("connection", (socket) => {
             // if playerId for b is missing
 
             if (game.playerId !== gameData.aPlayerId && gameData.bPlayerId == null) {
-                console.log("existing game, player b joining")
+                console.log("existing game, player b joining");
                 gameData.bPlayerId = game.playerId;
                 gameData.gameStatus = "bTurn";
                 await db.updateGame(gameData);
             }
         }
 
-        if (game.playerId === gameData.aPlayerId) gameData.player = "a"
-        else gameData.player = "b"
-
         socket.join(game.gameId);
-        answer("joined the game");
+
+        if (game.playerId === gameData.aPlayerId) player = "a";
+        else player = "b";
+        answer({player});
+
+        gameData = await db.getGame(game.gameId);
 
         io.to(game.gameId).emit("gameData", gameData);
     });
 
     socket.on("gameProgress", async (game) => {
-
-        // Veränderung
-        // board als JSON
-
         // Status:
         // aTurn: A ist an der Reihe
         // bTurn: B ist an der Reihe
@@ -81,11 +77,27 @@ io.on("connection", (socket) => {
         // draw: unentschieden
         // pending: falls Server noch keine Daten geschickt hat
 
-        const result = await db.updateGame(game);
+        let gameData = await db.getGame(game.gameId);
 
-        const gameData = await db.getGame(game.gameId);
+        for(item in game) {
+                gameData[item] = game[item];
+        }
 
-        io.to(game.gameId).emit("board", gameData);
+        // gameData.board = game.board;
+
+        if(gameData.gameStatus === "bTurn") {
+            gameData.gameStatus = "aTurn";
+        } else {
+            gameData.gameStatus = "bTurn";
+        }
+
+        gameData.board = JSON.stringify(gameData.board);
+        const result = await db.updateGame(gameData);
+
+        gameData = await db.getGame(game.gameId);
+        gameData.board = JSON.parse(gameData.board);
+
+        io.to(game.gameId).emit("gameData", gameData);
     });
 
     socket.on("disconnect", () => {
