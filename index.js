@@ -91,11 +91,9 @@ io.on("connection", (socket) => {
             gameData.gameStatus = "bTurn";
         }
 
-        gameData.board = JSON.stringify(gameData.board);
         const result = await db.updateGame(gameData);
 
         gameData = await db.getGame(game.gameId);
-        gameData.board = JSON.parse(gameData.board);
 
         io.to(game.gameId).emit("gameData", gameData);
     });
