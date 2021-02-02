@@ -36,17 +36,17 @@ io.on("connection", (socket) => {
             gameData = {
                 gameId: game.gameId,
                 aPlayerId: game.playerId,
-                board: [
+                board: JSON.stringify([
                     [0, 0, 0],
                     [0, 0, 0],
                     [0, 0, 0]
-                ],
+                ]),
                 aScore: 0,
                 bScore: 0,
-                gameStatus: "bTurn"
+                gameStatus: "pending",
             };
 
-            db.setGame(gameData);
+            await db.setGame(gameData);
         } else {
             // game is already been created
             // if playerId for b is missing
@@ -54,14 +54,18 @@ io.on("connection", (socket) => {
             if (game.playerId !== gameData.aPlayerId && gameData.bPlayerId == null) {
                 console.log("existing game, player b joining")
                 gameData.bPlayerId = game.playerId;
-                db.updateGame(gameData);
+                gameData.gameStatus = "bTurn";
+                await db.updateGame(gameData);
             }
         }
+
+        if (game.playerId === gameData.aPlayerId) gameData.player = "a"
+        else gameData.player = "b"
 
         socket.join(game.gameId);
         answer("joined the game");
 
-        io.to(game.gameId).emit("board", gameData);
+        io.to(game.gameId).emit("gameData", gameData);
     });
 
     socket.on("gameProgress", async (game) => {
@@ -75,14 +79,13 @@ io.on("connection", (socket) => {
         // aWon: A hat gewonnen
         // bWon: B hat gewonnen
         // draw: unentschieden
+        // pending: falls Server noch keine Daten geschickt hat
 
         const result = await db.updateGame(game);
-        console.log(result);
 
-        const data = await db.getGame(game.gameId);
+        const gameData = await db.getGame(game.gameId);
 
-        socket.emit("board", result);
-        io.to(game.gameId).emit("board", data);
+        io.to(game.gameId).emit("board", gameData);
     });
 
     socket.on("disconnect", () => {

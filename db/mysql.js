@@ -26,12 +26,13 @@ db.setGame = (game) => {
         game.gameId,
         game.aPlayerId,
         game.bPlayerId,
+        game.board,
         game.aScore,
         game.bScore,
         game.gameStatus
     ];
     return new Promise((resolve, reject) => {
-        pool.query('INSERT INTO games (gameId, aPlayerId, bPlayerId, aScore, bScore, gameStatus) VALUES (?, ?, ?, ?, ?, ?)',
+        pool.query('INSERT INTO games (gameId, aPlayerId, bPlayerId, board, aScore, bScore, gameStatus) VALUES (?, ?, ?, ?, ?, ?, ?)',
             fields,
             (err, rows, fields) => {
                 if (err) return reject(err);
