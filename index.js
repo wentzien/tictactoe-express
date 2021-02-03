@@ -89,8 +89,14 @@ io.on("connection", (socket) => {
         const bWon = hasWon(gameData.board, "b");
         const draw = checkDraw(gameData.board);
 
-        if (aWon) gameData.gameStatus = "aWon"
-        else if (bWon) gameData.gameStatus = "bWon"
+        if (aWon) {
+            gameData.gameStatus = "aWon";
+            gameData.aScore++;
+        }
+        else if (bWon) {
+            gameData.gameStatus = "bWon";
+            gameData.bScore++;
+        }
         else if (draw) gameData.gameStatus = "draw"
         else {
             if (gameData.gameStatus === "bTurn") gameData.gameStatus = "aTurn"
