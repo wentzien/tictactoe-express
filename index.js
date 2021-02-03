@@ -42,6 +42,7 @@ io.on("connection", (socket) => {
                 aScore: 0,
                 bScore: 0,
                 gameStatus: "pending",
+                starter: "b"
             };
 
             await db.setGame(gameData);
@@ -103,25 +104,39 @@ io.on("connection", (socket) => {
         io.to(game.gameId).emit("gameData", gameData);
     });
 
-    socket.on("playAgain", async (gameId) => {
+    socket.on("playAgain", async (game) => {
+        const {gameId, playerId} = game;
         let gameData = await db.getGame(gameId);
 
         const {gameStatus} = gameData;
 
-        if(gameStatus === "aWon" || gameStatus === "bWon" || gameStatus === "draw") {
+        if (gameStatus === "aWon" || gameStatus === "bWon" || gameStatus === "draw") {
             // fresh board
             gameData.board = [
                 [0, 0, 0],
                 [0, 0, 0],
                 [0, 0, 0]
             ];
-            gameData.gameStatus = "waiting";
+            if (gameId === gameData.aPlayerId) {
+                gameData.gameStatus = "aWaiting";
+            } else {
+                gameData.gameStatus = "bWaiting";
+            }
         }
-        if (gameStatus === "waiting") {
-            gameData.gameStatus = "bTurn";
+        if (gameStatus === "aWaiting" || gameStatus === "bWaiting") {
+            if (gameData.starter === "a") {
+                gameData.gameStatus = "bTurn";
+                gameData.starter = "b";
+            } else {
+                gameData.gameStatus = "aTurn";
+                gameData.starter = "a";
+            }
         }
 
         await db.updateGame(gameData);
+
+        gameData = await db.getGame(game.gameId);
+
         io.to(gameId).emit("gameData", gameData);
     });
 

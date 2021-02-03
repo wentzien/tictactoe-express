@@ -36,10 +36,11 @@ db.setGame = (game) => {
         game.board,
         game.aScore,
         game.bScore,
-        game.gameStatus
+        game.gameStatus,
+        game.starter
     ];
     return new Promise((resolve, reject) => {
-        pool.query('INSERT INTO games (gameId, aPlayerId, bPlayerId, board, aScore, bScore, gameStatus) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        pool.query('INSERT INTO games (gameId, aPlayerId, bPlayerId, board, aScore, bScore, gameStatus, starter) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
             fields,
             (err, rows, fields) => {
                 if (err) return reject(err);
@@ -57,11 +58,12 @@ db.updateGame = (game) => {
         game.aScore,
         game.bScore,
         game.gameStatus,
+        game.starter,
         game.gameId
     ];
 
     return new Promise((resolve, reject) => {
-        pool.query('UPDATE games SET aPlayerId = ?, bPlayerId = ?, board = ?, aScore = ?, bScore = ?, gameStatus = ? WHERE gameId = ?', fields,
+        pool.query('UPDATE games SET aPlayerId = ?, bPlayerId = ?, board = ?, aScore = ?, bScore = ?, gameStatus = ?, starter = ? WHERE gameId = ?', fields,
             (err, rows, fields) => {
                 if (err) return reject(err);
                 return resolve(rows);
