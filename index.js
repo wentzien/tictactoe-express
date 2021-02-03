@@ -117,7 +117,7 @@ io.on("connection", (socket) => {
                 [0, 0, 0],
                 [0, 0, 0]
             ];
-            if (gameId === gameData.aPlayerId) {
+            if (playerId === gameData.aPlayerId) {
                 gameData.gameStatus = "aWaiting";
             } else {
                 gameData.gameStatus = "bWaiting";
