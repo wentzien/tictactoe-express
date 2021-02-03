@@ -76,22 +76,23 @@ io.on("connection", (socket) => {
         // bWon: B hat gewonnen
         // draw: unentschieden
         // pending: falls Server noch keine Daten geschickt hat
+        // waiting: for other player
 
         let gameData = await db.getGame(game.gameId);
 
-        for(item in game) {
-                gameData[item] = game[item];
+        for (item in game) {
+            gameData[item] = game[item];
         }
 
         const aWon = hasWon(gameData.board, "a");
         const bWon = hasWon(gameData.board, "b");
         const draw = checkDraw(gameData.board);
 
-        if(aWon) gameData.gameStatus = "aWon"
+        if (aWon) gameData.gameStatus = "aWon"
         else if (bWon) gameData.gameStatus = "bWon"
         else if (draw) gameData.gameStatus = "draw"
         else {
-            if(gameData.gameStatus === "bTurn") gameData.gameStatus = "aTurn"
+            if (gameData.gameStatus === "bTurn") gameData.gameStatus = "aTurn"
             else gameData.gameStatus = "bTurn"
         }
 
@@ -100,6 +101,28 @@ io.on("connection", (socket) => {
         gameData = await db.getGame(game.gameId);
 
         io.to(game.gameId).emit("gameData", gameData);
+    });
+
+    socket.on("playAgain", async (gameId) => {
+        let gameData = await db.getGame(gameId);
+
+        const {gameStatus} = gameData;
+
+        if(gameStatus === "aWon" || gameStatus === "bWon" || gameStatus === "draw") {
+            // fresh board
+            gameData.board = [
+                [0, 0, 0],
+                [0, 0, 0],
+                [0, 0, 0]
+            ];
+            gameData.gameStatus = "waiting";
+        }
+        if (gameStatus === "waiting") {
+            gameData.gameStatus = "bTurn";
+        }
+
+        await db.updateGame(gameData);
+        io.to(gameId).emit("gameData", gameData);
     });
 
     socket.on("disconnect", () => {
@@ -133,6 +156,7 @@ function hasWon(board, player) {
         return true;
     return false;
 }
+
 function checkDraw(board) {
     for (let i = 0; i <= 2; i++) {
         for (let j = 0; j <= 2; j++) {
