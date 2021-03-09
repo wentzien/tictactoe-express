@@ -37,7 +37,7 @@ router.get("/", async (req, res) => {
         // waiting: for other player
 
         // send game data to client
-        res.send(gameData);
+        res.send({gameId, playerId: aPlayerId});
     } catch (ex) {
         console.log(ex);
     }
