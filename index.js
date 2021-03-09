@@ -8,8 +8,10 @@ const app = express();
 const server = http.createServer(app);
 const io = socketio(server, {
     cors: {
-        origin: "http://localhost:3000",
-        methods: ["GET", "POST"]
+        origin: "*",
+        methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+        preflightContinue: false,
+        optionsSuccessStatus: 204
     }
 });
 
@@ -19,57 +21,31 @@ const db = require("./db/mysql");
 app.use(cors());
 app.use(express.json());
 
-app.use("/games", gamesRouter);
+app.use("/api/games", gamesRouter);
 
 io.on("connection", (socket) => {
     console.log("new connection");
 
     socket.on("join", async (game, answer) => {
-        let player;
-        let gameData = await db.getGame(game.gameId);
+        // objekt mit playerId & gameId
+        const {gameId, playerId} = game;
 
-        if (gameData === null) {
-            // new game
-            console.log("new game, player a joining");
-            gameData = {
-                gameId: game.gameId,
-                aPlayerId: game.playerId,
-                board: [
-                    [0, 0, 0],
-                    [0, 0, 0],
-                    [0, 0, 0]
-                ],
-                aScore: 0,
-                bScore: 0,
-                gameStatus: "pending",
-                starter: "b"
-            };
 
-            await db.setGame(gameData);
-        } else {
-            // game is already been created
-            // if playerId for b is missing
+        if (gameId && playerId) {
+            let {aPlayerId, bPlayerId} = await db.getGame(gameId);
 
-            if (game.playerId !== gameData.aPlayerId && gameData.bPlayerId == null) {
-                console.log("existing game, player b joining");
-                gameData.bPlayerId = game.playerId;
-                gameData.gameStatus = "bTurn";
-                await db.updateGame(gameData);
+            if (playerId === aPlayerId || playerId === bPlayerId) {
+                socket.join(gameId);
+
+                io.to(gameId).emit("gameData", gameData);
             }
         }
-
-        socket.join(game.gameId);
-
-        if (game.playerId === gameData.aPlayerId) player = "a";
-        else player = "b";
-        answer({player});
-
-        gameData = await db.getGame(game.gameId);
-
-        io.to(game.gameId).emit("gameData", gameData);
     });
 
     socket.on("gameProgress", async (game) => {
+        // objekt mit playerId & gameId & neues Board
+        const {playerId, gameId, board: newBoard} = game;
+
         // Status:
         // aTurn: A ist an der Reihe
         // bTurn: B ist an der Reihe
@@ -79,80 +55,38 @@ io.on("connection", (socket) => {
         // pending: falls Server noch keine Daten geschickt hat
         // waiting: for other player
 
-        let gameData = await db.getGame(game.gameId);
+        if (gameId && playerId) {
+            let gameData = await db.getGame(gameId);
+            const {aPlayerId, bPlayerId, board: oldBoard, gameStatus} = gameData;
 
-        for (item in game) {
-            gameData[item] = game[item];
-        }
+            if ((gameStatus !== "aWon" || gameStatus !== "bWon" || gameStatus !== "draw")
+                && ((playerId === aPlayerId && gameStatus === "aTurn" && checkMove(oldBoard, newBoard, "a")
+                    || (playerId === bPlayerId && gameStatus === "bTurn" && checkMove(oldBoard, newBoard, "b"))))) {
 
-        const aWon = hasWon(gameData.board, "a");
-        const bWon = hasWon(gameData.board, "b");
-        const draw = checkDraw(gameData.board);
+                const aWon = hasWon(newBoard, "a");
+                const bWon = hasWon(newBoard, "b");
+                const draw = checkDraw(newBoard);
 
-        if (aWon) {
-            gameData.gameStatus = "aWon";
-            gameData.aScore++;
-        }
-        else if (bWon) {
-            gameData.gameStatus = "bWon";
-            gameData.bScore++;
-        }
-        else if (draw) gameData.gameStatus = "draw"
-        else {
-            if (gameData.gameStatus === "bTurn") gameData.gameStatus = "aTurn"
-            else gameData.gameStatus = "bTurn"
-        }
+                if (aWon) {
+                    gameData.gameStatus = "aWon";
+                } else if (bWon) {
+                    gameData.gameStatus = "bWon";
+                } else if (draw) {
+                    gameData.gameStatus = "draw";
+                }
 
-        const result = await db.updateGame(gameData);
-
-        gameData = await db.getGame(game.gameId);
-
-        io.to(game.gameId).emit("gameData", gameData);
-    });
-
-    socket.on("playAgain", async (game) => {
-        const {gameId, playerId} = game;
-        let gameData = await db.getGame(gameId);
-
-        const {gameStatus} = gameData;
-
-        if (gameStatus === "aWon" || gameStatus === "bWon" || gameStatus === "draw") {
-            // fresh board
-            gameData.board = [
-                [0, 0, 0],
-                [0, 0, 0],
-                [0, 0, 0]
-            ];
-            if (playerId === gameData.aPlayerId) {
-                gameData.gameStatus = "aWaiting";
-            } else {
-                gameData.gameStatus = "bWaiting";
+                gameData.board = newBoard;
+                await db.updateGame(gameData);
             }
+
+            io.to(game.gameId).emit("gameData", gameData);
         }
-        if (gameStatus === "aWaiting" || gameStatus === "bWaiting") {
-            if (gameData.starter === "a") {
-                gameData.gameStatus = "bTurn";
-                gameData.starter = "b";
-            } else {
-                gameData.gameStatus = "aTurn";
-                gameData.starter = "a";
-            }
-        }
-
-        await db.updateGame(gameData);
-
-        gameData = await db.getGame(game.gameId);
-
-        io.to(gameId).emit("gameData", gameData);
     });
 
     socket.on("disconnect", () => {
         console.log("user left");
     });
 });
-
-// app.use("/questions", questionRouter);
-// app.use("/events", eventRouter);
 
 // Port
 const port = process.env.PORT || 5000;
@@ -187,4 +121,20 @@ function checkDraw(board) {
         }
     }
     return true;
+}
+
+function checkMove(oldBoard, newBoard, player) {
+    let countDiff = 0;
+    for (let x = 0; x < 3; x++) {
+        for (let y = 0; y < 3; y++) {
+            if (oldBoard[x][y] !== newBoard[x][y]) {
+                if (newBoard[x][y] === player) {
+                    countDiff++;
+                } else {
+                    return false;
+                }
+            }
+        }
+    }
+    return countDiff === 1;
 }
