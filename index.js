@@ -8,10 +8,7 @@ const app = express();
 const server = http.createServer(app);
 const io = socketio(server, {
     cors: {
-        origin: "*",
-        methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
-        preflightContinue: false,
-        optionsSuccessStatus: 204
+        origin: "*"
     }
 });
 
@@ -32,7 +29,8 @@ io.on("connection", (socket) => {
 
 
         if (gameId && playerId) {
-            let {aPlayerId, bPlayerId} = await db.getGame(gameId);
+            let gameData = await db.getGame(gameId);
+            const {aPlayerId, bPlayerId} = gameData;
 
             if (playerId === aPlayerId || playerId === bPlayerId) {
                 socket.join(gameId);
@@ -73,13 +71,17 @@ io.on("connection", (socket) => {
                     gameData.gameStatus = "bWon";
                 } else if (draw) {
                     gameData.gameStatus = "draw";
+                } else {
+                    // anderer Spieler ist am Zug
+                    gameData.gameStatus = gameData.gameStatus === "aTurn" ? "bTurn" : "aTurn";
                 }
 
                 gameData.board = newBoard;
                 await db.updateGame(gameData);
             }
+            gameData = await db.getGame(gameId);
 
-            io.to(game.gameId).emit("gameData", gameData);
+            io.to(gameId).emit("gameData", gameData);
         }
     });
 
