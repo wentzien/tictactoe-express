@@ -9,10 +9,12 @@ router.get("/", async (req, res) => {
         const gameId = uuidv4();
         const aPlayerId = uuidv4();
         const bPlayerId = uuidv4();
+        const nextGameId = uuidv4();
 
         // create game data in db
         let gameData = {
             gameId: gameId,
+            gameCount: 0,
             aPlayerId: aPlayerId,
             bPlayerId: bPlayerId,
             board: [
@@ -23,18 +25,11 @@ router.get("/", async (req, res) => {
             aScore: 0,
             bScore: 0,
             gameStatus: "bTurn",
+            nextGameId: nextGameId,
+            starter: "b"
         };
 
         await db.setGame(gameData);
-
-        // Status:
-        // aTurn: A ist an der Reihe
-        // bTurn: B ist an der Reihe
-        // aWon: A hat gewonnen
-        // bWon: B hat gewonnen
-        // draw: unentschieden
-        // pending: falls Server noch keine Daten geschickt hat
-        // waiting: for other player
 
         // send game data to client
         res.send({gameId, playerId: aPlayerId});

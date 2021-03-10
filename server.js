@@ -4,6 +4,8 @@ const socketio = require("socket.io");
 const http = require("http");
 const cors = require("cors");
 const app = express();
+const {v4: uuidv4} = require("uuid");
+
 
 const server = http.createServer(app);
 const io = socketio(server, {
@@ -22,16 +24,16 @@ app.use(express.json());
 
 app.use("/api/games", gamesRouter);
 
-io.on("connection", (socket) => {
+io.on("connection", socket => {
     console.log("new connection");
 
-    socket.on("join", async (game, answer) => {
+    socket.on("join", async game => {
         // objekt mit playerId & gameId
         const {gameId, playerId} = game;
 
 
         if (gameId && playerId) {
-            let gameData = await db.getGame(gameId);
+            let gameData = await db.getLatestGame(gameId);
             const {aPlayerId, bPlayerId} = gameData;
 
             if (playerId === aPlayerId || playerId === bPlayerId) {
@@ -42,7 +44,7 @@ io.on("connection", (socket) => {
         }
     });
 
-    socket.on("gameProgress", async (game) => {
+    socket.on("gameProgress", async game => {
         // objekt mit playerId & gameId & neues Board
         const {playerId, gameId, board: newBoard} = game;
 
@@ -56,8 +58,8 @@ io.on("connection", (socket) => {
         // waiting: for other player
 
         if (gameId && playerId) {
-            let gameData = await db.getGame(gameId);
-            const {aPlayerId, bPlayerId, board: oldBoard, gameStatus} = gameData;
+            let gameData = await db.getLatestGame(gameId);
+            const {aPlayerId, bPlayerId, board: oldBoard, gameStatus, gameCount} = gameData;
 
             if ((gameStatus !== "aWon" || gameStatus !== "bWon" || gameStatus !== "draw")
                 && ((playerId === aPlayerId && gameStatus === "aTurn" && checkMove(oldBoard, newBoard, "a")
@@ -69,8 +71,10 @@ io.on("connection", (socket) => {
 
                 if (aWon) {
                     gameData.gameStatus = "aWon";
+                    gameData.aScore++;
                 } else if (bWon) {
                     gameData.gameStatus = "bWon";
+                    gameData.bScore++;
                 } else if (draw) {
                     gameData.gameStatus = "draw";
                 } else {
@@ -81,9 +85,47 @@ io.on("connection", (socket) => {
                 gameData.board = newBoard;
                 await db.updateGame(gameData);
             }
-            gameData = await db.getGame(gameId);
+            gameData = await db.getLatestGame(gameId);
 
             io.to(gameId).emit("gameData", gameData);
+        }
+    });
+
+    socket.on("nextGame", async game => {
+        const {playerId, gameId} = game;
+        if (gameId && playerId) {
+            let gameData = await db.getLatestGame(gameId);
+            let {aPlayerId, bPlayerId, gameStatus, starter, aScore, bScore, gameCount} = gameData;
+            if ((gameStatus === "aWon" || gameStatus === "bWon" || gameStatus === "draw")
+                && (playerId === aPlayerId || playerId === bPlayerId)) {
+                // erst dann ist ein weiteres Spiel möglich
+
+                gameStatus = starter === "b" ? "aTurn" : "bTurn";
+                starter = starter === "b" ? "a" : "b";
+                gameCount++;
+
+                let gameData = {
+                    gameId: gameId,
+                    gameCount: gameCount,
+                    aPlayerId: aPlayerId,
+                    bPlayerId: bPlayerId,
+                    board: [
+                        [0, 0, 0],
+                        [0, 0, 0],
+                        [0, 0, 0]
+                    ],
+                    aScore: aScore,
+                    bScore: bScore,
+                    gameStatus: gameStatus,
+                    starter: starter
+                };
+
+                await db.setGame(gameData);
+
+                gameData = await db.getLatestGame(gameId);
+
+                io.to(gameId).emit("gameData", gameData);
+            }
         }
     });
 

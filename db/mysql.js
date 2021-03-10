@@ -11,12 +11,12 @@ const pool = mysql.createPool({
 
 const db = {};
 
-db.getGame = (gameId) => {
+db.getLatestGame = (gameId) => {
 
     return new Promise((resolve, reject) => {
-        pool.query('SELECT * FROM games WHERE gameId = ?', gameId, (err, rows, fields) => {
+        pool.query('SELECT * FROM games WHERE gameId = ? ORDER BY gameCount DESC', gameId, (err, rows, fields) => {
             if (err) return reject(err);
-            if(rows[0]) {
+            if (rows[0]) {
                 let gameData = rows[0];
                 gameData.board = JSON.parse(gameData.board);
                 return resolve(gameData);
@@ -28,9 +28,10 @@ db.getGame = (gameId) => {
 };
 
 db.setGame = (game) => {
-    if(game.board) game.board = JSON.stringify(game.board);
+    if (game.board) game.board = JSON.stringify(game.board);
     const fields = [
         game.gameId,
+        game.gameCount,
         game.aPlayerId,
         game.bPlayerId,
         game.board,
@@ -40,7 +41,9 @@ db.setGame = (game) => {
         game.starter
     ];
     return new Promise((resolve, reject) => {
-        pool.query('INSERT INTO games (gameId, aPlayerId, bPlayerId, board, aScore, bScore, gameStatus, starter) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        pool.query('INSERT INTO games (gameId, gameCount, aPlayerId, bPlayerId, board, aScore,' +
+            ' bScore,' +
+            ' gameStatus, starter) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
             fields,
             (err, rows, fields) => {
                 if (err) return reject(err);
@@ -50,20 +53,19 @@ db.setGame = (game) => {
 };
 
 db.updateGame = (game) => {
-    if(game.board) game.board = JSON.stringify(game.board);
+    if (game.board) game.board = JSON.stringify(game.board);
     const fields = [
-        game.aPlayerId,
-        game.bPlayerId,
         game.board,
         game.aScore,
         game.bScore,
         game.gameStatus,
-        game.starter,
-        game.gameId
+        game.gameId,
+        game.gameCount
     ];
 
     return new Promise((resolve, reject) => {
-        pool.query('UPDATE games SET aPlayerId = ?, bPlayerId = ?, board = ?, aScore = ?, bScore = ?, gameStatus = ?, starter = ? WHERE gameId = ?', fields,
+        pool.query('UPDATE games SET board = ?, aScore = ?, bScore = ?, gameStatus = ? WHERE' +
+            ' gameId = ? AND gameCount = ?', fields,
             (err, rows, fields) => {
                 if (err) return reject(err);
                 return resolve(rows);
